@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 
-class ResidualBlock(nn.Module):
+class _ResidualBlock(nn.Module):
     '''
     Residual Block
     Currently only used in the ResNetGenerator.
@@ -64,7 +64,7 @@ class ResNet(nn.Module):
         )
 
         # residual blocks
-        list_residual_blocks = [ResidualBlock(128, 128) for _ in range(num_residual_blocks)]
+        list_residual_blocks = [_ResidualBlock(128, 128) for _ in range(num_residual_blocks)]
         self.residual_blocks = nn.Sequential(*list_residual_blocks)
 
         # final upsampling
