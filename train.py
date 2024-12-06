@@ -7,6 +7,11 @@ from torchvision import transforms
 from model import RecycleGAN
 from data_module import RecycleGANDataModule
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.loggers import WandbLogger
+
+torch.set_float32_matmul_precision('medium')
+
+wandb_logger = WandbLogger(project="my_project_name", log_model=True)
 
 def train():
     # Transforms
@@ -18,8 +23,8 @@ def train():
 
     # DataModule
     data_module = RecycleGANDataModule(
-        video_path_A="videos/domainA_video.mp4",
-        video_path_B="videos/domainB_video.mp4",
+        video_path_A="videos/trimmed/trimmed_animated.mp4",
+        video_path_B="videos/trimmed/trimmed_live_action.mp4",
         batch_size=4,
         transform=transform
     )
@@ -43,17 +48,18 @@ def train():
         save_last=True
     )
 
-    lr_monitor = LearningRateMonitor(lfogging_interval='epoch')
+    lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
     # Trainer
     trainer = pl.Trainer(
         max_epochs=100,
-        accelerator='gpu' if torch.cuda.is_available() else 'cpu',
-        devices=1,
+        logger=wandb_logger,
+        accelerator='gpu',
+        devices=-1,
+        strategy='ddp_find_unused_parameters_true', # some parameters not used during updates (e.g. in the generator, discriminator is not used) 
         callbacks=[checkpoint_callback, lr_monitor],
-        precision=16,  # mixed precision
+        precision='16-mixed',  # mixed precision
         enable_progress_bar=True,
-        gradient_clip_val=1.0  # gradient clipping
     )
 
     # Train

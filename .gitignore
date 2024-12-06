@@ -1,0 +1,8 @@
+/videos
+/lightning_logs
+/__pycache__
+/checkpoints
+/notebooks
+/runs
+/wandb
+test.py
