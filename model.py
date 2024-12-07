@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 from torch.nn import functional as F
 import torch.nn as nn
 from torchvision.utils import make_grid
-import wanb
+import wandb
 
 from generators import ResNet, UNet
 from discriminator import PatchGAN, MultiScaleDiscriminator
@@ -15,8 +15,8 @@ class RecycleGAN(pl.LightningModule):
         
         self.AtoB = UNet()
         self.BtoA = UNet()
-        self.nextA = ResNet(in_channels=6, num_residual_blocks=8)
-        self.nextB = ResNet(in_channels=6, num_residual_blocks=8)
+        self.nextA = ResNet(num_residual_blocks=8)
+        self.nextB = ResNet(num_residual_blocks=8)
         self.discriminatorA = MultiScaleDiscriminator()
         self.discriminatorB = MultiScaleDiscriminator()
 
@@ -110,18 +110,18 @@ class RecycleGAN(pl.LightningModule):
         fake_a = self.BtoA(real_b)
         rec_b = self.AtoB(fake_a)
 
-        input_next_a = torch.cat([real_a_prev, fake_a], dim=1)
-        pred_next_a = self.nextA(input_next_a)
-        input_next_b = torch.cat([real_b_prev, fake_b], dim=1)
-        pred_next_b = self.nextB(input_next_b)
+        pred_next_a = self.nextA(fake_a) # P_A(f_A)
+        pred_next_b = self.nextB(fake_b) # P_B(f_B)
+        rec_next_a = self.BtoA(pred_next_b) 
+        rec_next_b = self.AtoB(pred_next_a) 
 
         return {
             'fake_b': fake_b,
             'rec_a': rec_a,
             'fake_a': fake_a,
             'rec_b': rec_b,
-            'pred_next_a': pred_next_a,
-            'pred_next_b': pred_next_b
+            'rec_next_a': rec_next_a,
+            'rec_next_b': rec_next_b
         }
 
     def training_step(self, batch, batch_idx):
@@ -181,8 +181,8 @@ class RecycleGAN(pl.LightningModule):
         loss_idt_b = self.identity_loss(idt_b, real_b) * self.l_iden
         loss_idt = (loss_idt_a + loss_idt_b) * 0.5
 
-        loss_temp_a = self.temporal_loss(outputs['pred_next_a'], real_a_next) * self.l_temp
-        loss_temp_b = self.temporal_loss(outputs['pred_next_b'], real_b_next) * self.l_temp
+        loss_temp_a = self.temporal_loss(outputs['rec_next_a'], real_a_next) * self.l_temp
+        loss_temp_b = self.temporal_loss(outputs['rec_next_b'], real_b_next) * self.l_temp
         loss_temp = (loss_temp_a + loss_temp_b) * 0.5
 
         loss_g = loss_g_adv + loss_cycle + loss_idt + loss_temp
@@ -234,6 +234,12 @@ class RecycleGAN(pl.LightningModule):
         return [opt_d, opt_g], [sched_d, sched_g]
 
     def compute_adversarial_loss(self, preds, target):
+
+        if target == torch.ones_like(preds):
+            target = target * 0.9  # Positive labels smoothed to 0.9
+        else:
+            target = target * 0.1  # Negative labels smoothed to 0.1
+
         return sum(self.adversarial_loss(pred, target) for pred in preds) / len(preds)
         
     # Denormalize!

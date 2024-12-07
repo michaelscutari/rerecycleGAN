@@ -1,9 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=rerecycleGAN
-#SBATCH --gres=gpu:a5000:4
+#SBATCH --gres=gpu:a5000:4  # Request 4 A100 GPUs
 #SBATCH --mem=32G
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1                  
 #SBATCH --cpus-per-task=8  # Allocate 8 CPU threads
 #SBATCH --time=48:00:00  # Adjust time limit as needed
 #SBATCH --output=output_%j.log  # Save output logs
