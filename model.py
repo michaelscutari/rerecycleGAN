@@ -2,6 +2,8 @@ import torch
 import pytorch_lightning as pl
 from torch.nn import functional as F
 import torch.nn as nn
+from torchvision.utils import make_grid
+import wanb
 
 from generators import ResNet, UNet
 from discriminator import PatchGAN, MultiScaleDiscriminator
@@ -130,31 +132,43 @@ class RecycleGAN(pl.LightningModule):
         # Discriminator training
         opt_d.zero_grad()
         
+        # Discriminator A
         pred_real_a = self.discriminatorA(real_a)
         pred_fake_a = self.discriminatorA(outputs['fake_a'].detach())
-        loss_d_a_real = self.adversarial_loss(pred_real_a, torch.ones_like(pred_real_a))
-        loss_d_a_fake = self.adversarial_loss(pred_fake_a, torch.zeros_like(pred_fake_a))
+
+        loss_d_a_real = self.compute_adversarial_loss(pred_real_a, torch.ones_like(pred_real_a))
+        loss_d_a_fake = self.compute_adversarial_loss(pred_fake_a, torch.zeros_like(pred_fake_a))
         loss_d_a = (loss_d_a_real + loss_d_a_fake) * 0.5
 
+        # Discriminator B
         pred_real_b = self.discriminatorB(real_b)
         pred_fake_b = self.discriminatorB(outputs['fake_b'].detach())
-        loss_d_b_real = self.adversarial_loss(pred_real_b, torch.ones_like(pred_real_b))
-        loss_d_b_fake = self.adversarial_loss(pred_fake_b, torch.zeros_like(pred_fake_b))
+
+        loss_d_b_real = self.compute_adversarial_loss(pred_real_b, torch.ones_like(pred_real_b))
+        loss_d_b_fake = self.compute_adversarial_loss(pred_fake_b, torch.zeros_like(pred_fake_b))
         loss_d_b = (loss_d_b_real + loss_d_b_fake) * 0.5
 
+        # Total Discriminator loss
         loss_d = (loss_d_a + loss_d_b) * 0.5
+
         self.manual_backward(loss_d)
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+
+        torch.nn.utils.clip_grad_norm_(self.discriminatorA.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.discriminatorB.parameters(), max_norm=1.0)
+
         opt_d.step()
 
         # Generator training
         opt_g.zero_grad()
         
+        # Get discriminator outputs for fake images
         pred_fake_a = self.discriminatorA(outputs['fake_a'])
         pred_fake_b = self.discriminatorB(outputs['fake_b'])
-        loss_g_adv_a = self.adversarial_loss(pred_fake_a, torch.ones_like(pred_fake_a))
-        loss_g_adv_b = self.adversarial_loss(pred_fake_b, torch.ones_like(pred_fake_b))
-        loss_g_adv = (loss_g_adv_a + loss_g_adv_b) * 0.5 * self.l_adv
+
+        # Adversarial loss for generators
+        loss_g_adv_a = self.compute_adversarial_loss(pred_fake_a, torch.ones_like(pred_fake_a))
+        loss_g_adv_b = self.compute_adversarial_loss(pred_fake_b, torch.ones_like(pred_fake_b))
+        loss_g_adv = (loss_g_adv_a + loss_g_adv_b) * 0.5
 
         loss_cycle_a = self.cycle_loss(outputs['rec_a'], real_a) * self.l_cycle
         loss_cycle_b = self.cycle_loss(outputs['rec_b'], real_b) * self.l_cycle
@@ -172,7 +186,12 @@ class RecycleGAN(pl.LightningModule):
 
         loss_g = loss_g_adv + loss_cycle + loss_idt + loss_temp
         self.manual_backward(loss_g)
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+        
+        torch.nn.utils.clip_grad_norm_(self.AtoB.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.BtoA.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.nextA.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.nextB.parameters(), max_norm=1.0)
+
         opt_g.step()
 
         # Logging
@@ -212,7 +231,14 @@ class RecycleGAN(pl.LightningModule):
         })
         
         return [opt_d, opt_g], [sched_d, sched_g]
+
+    def compute_adversarial_loss(self, preds, target):
+        return sum(self.adversarial_loss(pred, target) for pred in preds) / len(preds)
         
+    # Denormalize!
+    def denormalize(tensor):
+        return tensor * 0.5 + 0.5
+    
     def init_weights(self, module):
         """
         Initialize the weights of layers in the model using Kaiming He initialization.

@@ -11,7 +11,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 torch.set_float32_matmul_precision('medium')
 
-wandb_logger = WandbLogger(project="my_project_name", log_model=True)
+wandb_logger = WandbLogger(project="rerecycleGAN", log_model=True)
 
 def train():
     # Transforms

@@ -100,8 +100,8 @@ class UNet(nn.Module):
         self.up4 = self.up_block(base_features * 2, base_features)
 
         # Decoder blocks
-        self.dec1 = self.dec_block(base_features * 16, base_features * 8)
-        self.dec2 = self.dec_block(base_features * 8, base_features * 4)
+        self.dec1 = self.dec_block(base_features * 16, base_features * 8, dropout=True)
+        self.dec2 = self.dec_block(base_features * 8, base_features * 4, dropout=True)
         self.dec3 = self.dec_block(base_features * 4, base_features * 2)
         self.dec4 = self.dec_block(base_features * 2, base_features)
 

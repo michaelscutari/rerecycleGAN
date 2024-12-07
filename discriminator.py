@@ -58,7 +58,5 @@ class MultiScaleDiscriminator(nn.Module):
             current_input = F.interpolate(
                 current_input, scale_factor=0.5, mode='bilinear', align_corners=False
             )
-
         # Combine the outputs into a single loss value
-        combined_loss = sum([torch.mean(output) for output in outputs]) / len(outputs)
-        return combined_loss
+        return outputs
