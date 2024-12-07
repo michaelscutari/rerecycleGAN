@@ -54,53 +54,54 @@ class RecycleGAN(pl.LightningModule):
         self.log('lr_generator', self.learning_rate_g)
     
 
-    def on_epoch_end(self):
-        # DEBUG
-        print("Epoch end")
-        # Generate outputs using fixed inputs
-        with torch.no_grad():
-            self.eval()  # Switch to evaluation mode
-            outputs = self.forward(self.fixed_real_a, self.fixed_real_b, self.fixed_real_a, self.fixed_real_b)
-
+    def on_train_epoch_end(self):
+        if self.current_epoch % 5 == 0:
             # DEBUG
-            print("Outputs generated")
+            print("Epoch end")
+            # Generate outputs using fixed inputs
+            with torch.no_grad():
+                self.eval()  # Switch to evaluation mode
+                outputs = self(self.fixed_real_a, self.fixed_real_b, self.fixed_real_a, self.fixed_real_b)
 
-            # Denormalize images for logging
-            real_a = denormalize(self.fixed_real_a.cpu())
-            fake_b = denormalize(outputs['fake_b'].cpu())
-            rec_a = denormalize(outputs['rec_a'].cpu())
-            real_b = denormalize(self.fixed_real_b.cpu())
-            fake_a = denormalize(outputs['fake_a'].cpu())
-            rec_b = denormalize(outputs['rec_b'].cpu())
+                # DEBUG
+                print("Outputs generated")
 
-            # DEBUG
-            print("Images denormalized")
+                # Denormalize images for logging
+                real_a = denormalize(self.fixed_real_a.cpu())
+                fake_b = denormalize(outputs['fake_b'].cpu())
+                rec_a = denormalize(outputs['rec_a'].cpu())
+                real_b = denormalize(self.fixed_real_b.cpu())
+                fake_a = denormalize(outputs['fake_a'].cpu())
+                rec_b = denormalize(outputs['rec_b'].cpu())
 
-            # Create grids
-            grid_real_a = make_grid(real_a, nrow=4, normalize=True)
-            grid_fake_b = make_grid(fake_b, nrow=4, normalize=True)
-            grid_rec_a = make_grid(rec_a, nrow=4, normalize=True)
-            grid_real_b = make_grid(real_b, nrow=4, normalize=True)
-            grid_fake_a = make_grid(fake_a, nrow=4, normalize=True)
-            grid_rec_b = make_grid(rec_b, nrow=4, normalize=True)
+                # DEBUG
+                print("Images denormalized")
 
-            # DEBUG
-            print("Grids created")
+                # Create grids
+                grid_real_a = make_grid(real_a, nrow=4, normalize=True)
+                grid_fake_b = make_grid(fake_b, nrow=4, normalize=True)
+                grid_rec_a = make_grid(rec_a, nrow=4, normalize=True)
+                grid_real_b = make_grid(real_b, nrow=4, normalize=True)
+                grid_fake_a = make_grid(fake_a, nrow=4, normalize=True)
+                grid_rec_b = make_grid(rec_b, nrow=4, normalize=True)
 
-            # Log the images
-            self.logger.experiment.log({
-                'Fixed Real A': [wandb.Image(grid_real_a, caption="Fixed Real A")],
-                'Fixed Fake B': [wandb.Image(grid_fake_b, caption="Fixed Fake B")],
-                'Fixed Rec A': [wandb.Image(grid_rec_a, caption="Fixed Rec A")],
-                'Fixed Real B': [wandb.Image(grid_real_b, caption="Fixed Real B")],
-                'Fixed Fake A': [wandb.Image(grid_fake_a, caption="Fixed Fake A")],
-                'Fixed Rec B': [wandb.Image(grid_rec_b, caption="Fixed Rec B")],
-                'epoch': self.current_epoch
-            })
-            self.train()  # Switch back to training mode
+                # DEBUG
+                print("Grids created")
 
-            # DEBUG
-            print("Images logged")
+                # Log the images
+                self.logger.experiment.log({
+                    'Fixed Real A': [wandb.Image(grid_real_a, caption="Fixed Real A")],
+                    'Fixed Fake B': [wandb.Image(grid_fake_b, caption="Fixed Fake B")],
+                    'Fixed Rec A': [wandb.Image(grid_rec_a, caption="Fixed Rec A")],
+                    'Fixed Real B': [wandb.Image(grid_real_b, caption="Fixed Real B")],
+                    'Fixed Fake A': [wandb.Image(grid_fake_a, caption="Fixed Fake A")],
+                    'Fixed Rec B': [wandb.Image(grid_rec_b, caption="Fixed Rec B")],
+                    'epoch': self.current_epoch
+                })
+                self.train()  # Switch back to training mode
+
+                # DEBUG
+                print("Images logged")
 
     def forward(self, real_a, real_b, real_a_prev, real_b_prev):
 
@@ -127,7 +128,7 @@ class RecycleGAN(pl.LightningModule):
         opt_d, opt_g = self.optimizers()
         
         real_a, real_b, real_a_prev, real_b_prev, real_a_next, real_b_next = batch
-        outputs = self.forward(real_a, real_b, real_a_prev, real_b_prev)
+        outputs = self(real_a, real_b, real_a_prev, real_b_prev)
 
         # Discriminator training
         opt_d.zero_grad()
