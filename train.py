@@ -38,6 +38,7 @@ def train():
         learning_rate_d=0.0001,
         learning_rate_g=0.0002,
         learning_rate_p=0.0002
+        lr_warmup_epochs=10
     )
 
     # Callbacks
