@@ -1,0 +1,4 @@
+  File "/home/users/mas296/projects/ece661-GAN-project/rerecycleGAN/train.py", line 40
+    learning_rate_p=0.0002
+    ^
+SyntaxError: invalid syntax
