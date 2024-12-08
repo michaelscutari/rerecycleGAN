@@ -9,7 +9,7 @@ from generators import ResNet, UNet
 from discriminator import PatchGAN, MultiScaleDiscriminator
 
 class RecycleGAN(pl.LightningModule):
-    def __init__(self, l_adv, l_cycle, l_iden, l_temp, learning_rate_d, learning_rate_g, learning_rate_p):
+    def __init__(self, l_adv, l_cycle, l_iden, l_temp, learning_rate_d, learning_rate_g, learning_rate_p, lr_warmup_epochs=10):
         super(RecycleGAN, self).__init__()
         self.automatic_optimization = False
         
@@ -34,6 +34,7 @@ class RecycleGAN(pl.LightningModule):
         self.learning_rate_d = learning_rate_d
         self.learning_rate_g = learning_rate_g
         self.learning_rate_p = learning_rate_p
+        self.lr_warmup_epochs = lr_warmup_epochs
         
         self.adversarial_loss = torch.nn.BCEWithLogitsLoss()
         self.cycle_loss = torch.nn.L1Loss()
@@ -325,9 +326,32 @@ class RecycleGAN(pl.LightningModule):
             lr=self.learning_rate_p, betas=(0.5, 0.999)
         )
         
-        sched_d = torch.optim.lr_scheduler.StepLR(opt_d, step_size=10, gamma=0.1)
-        sched_g = torch.optim.lr_scheduler.StepLR(opt_g, step_size=10, gamma=0.1)
-        sched_p = torch.optim.lr_scheduler.StepLR(opt_p, step_size=10, gamma=0.1)
+
+        sched_d = torch.optim.lr_scheduler.SequentialLR(
+            opt_d,
+            schedulers=[torch.optim.lr_scheduler.LinearLR(opt_d, start_factor=0.1, total_iters=self.lr_warmup_epochs),
+                        torch.optim.lr_scheduler.StepLR(opt_d, step_size=10, gamma=0.1)],
+            milestones=[self.lr_warmup_epochs]
+        )
+
+        sched_g = torch.optim.lr_scheduler.SequentialLR(
+            opt_g,
+            schedulers=[torch.optim.lr_scheduler.LinearLR(opt_g, start_factor=0.1, total_iters=self.lr_warmup_epochs),
+                        torch.optim.lr_scheduler.StepLR(opt_g, step_size=10, gamma=0.1)],
+            milestones=[self.lr_warmup_epochs]
+        )
+
+        sched_p = torch.optim.lr_scheduler.SequentialLR(
+            opt_p,
+            schedulers=[torch.optim.lr_scheduler.LinearLR(opt_p, start_factor=0.1, total_iters=self.lr_warmup_epochss),
+                        torch.optim.lr_scheduler.StepLR(opt_p, step_size=10, gamma=0.1)],
+            milestones=[self.lr_warmup_epochs]
+        )
+
+        # Old, without warmup
+        # sched_d = torch.optim.lr_scheduler.StepLR(opt_d, step_size=10, gamma=0.1)
+        # sched_g = torch.optim.lr_scheduler.StepLR(opt_g, step_size=10, gamma=0.1)
+        # sched_p = torch.optim.lr_scheduler.StepLR(opt_p, step_size=10, gamma=0.1)
 
         self.logger.log_hyperparams({
         'lr_discriminator': self.learning_rate_d,
