@@ -5,8 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8  # Allocate 8 CPU threads
 #SBATCH --time=48:00:00  # Adjust time limit as needed
-#SBATCH --output=output_%j.log  # Save output logs
-#SBATCH --error=error_%j.err
+#SBATCH --output=run/output_%j.log  # Save output logs
+#SBATCH --error=run/error_%j.err # 
 \
 module load cuda/cuda-12.1  # Load necessary modules if required
 source ~/.bashrc  # Activate your conda environment

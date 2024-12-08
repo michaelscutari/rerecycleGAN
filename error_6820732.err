@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "/home/users/mas296/projects/ece661-GAN-project/rerecycleGAN/train.py", line 69, in <module>
-    train()
-  File "/home/users/mas296/projects/ece661-GAN-project/rerecycleGAN/train.py", line 33, in train
-    model = RecycleGAN(
-TypeError: __init__() missing 1 required positional argument: 'learning_rate_p'

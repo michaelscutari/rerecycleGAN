@@ -39,7 +39,7 @@ class RecycleGAN(pl.LightningModule):
         self.cycle_loss = torch.nn.L1Loss()
         self.identity_loss = torch.nn.L1Loss()
         self.recycle_loss = torch.nn.MSELoss()
-        self.recurrent_loss = torch.nn.L1Loss()
+        self.recurrent_loss = torch.nn.MSELoss()
 
         self.fixed_real_a = None  # Placeholder for fixed samples
         self.fixed_real_b = None
@@ -57,66 +57,66 @@ class RecycleGAN(pl.LightningModule):
     
 
     def on_train_epoch_end(self):
-        if self.current_epoch % 5 == 0:
-            # DEBUG
-            print("Epoch end")
-            # Generate outputs using fixed inputs
-            with torch.no_grad():
-                self.eval()  # Switch to evaluation mode
-                outputs = self(self.fixed_real_a, self.fixed_real_b, self.fixed_real_a, self.fixed_real_b)
+        sch_d, sch_g, sch_p = self.lr_schedulers()
+        sch_d.step()
+        sch_g.step()
+        sch_p.step()
 
-                # DEBUG
-                print("Outputs generated")
-
-                # Denormalize images for logging
-                real_a = self.denormalize(self.fixed_real_a.cpu())
-                fake_b = self.denormalize(outputs['fake_b'].cpu())
-                rec_a = self.denormalize(outputs['rec_a'].cpu())
-                real_b = self.denormalize(self.fixed_real_b.cpu())
-                fake_a = self.denormalize(outputs['fake_a'].cpu())
-                rec_b = self.denormalize(outputs['rec_b'].cpu())
-
-                # DEBUG
-                print("Images denormalized")
-
-                # Create grids
-                grid_real_a = make_grid(real_a, nrow=4, normalize=True)
-                grid_fake_b = make_grid(fake_b, nrow=4, normalize=True)
-                grid_rec_a = make_grid(rec_a, nrow=4, normalize=True)
-                grid_real_b = make_grid(real_b, nrow=4, normalize=True)
-                grid_fake_a = make_grid(fake_a, nrow=4, normalize=True)
-                grid_rec_b = make_grid(rec_b, nrow=4, normalize=True)
-
-                # DEBUG
-                print("Grids created")
-
-                # Log the images
-                self.logger.experiment.log({
-                    'Fixed Real A': [wandb.Image(grid_real_a, caption="Fixed Real A")],
-                    'Fixed Fake B': [wandb.Image(grid_fake_b, caption="Fixed Fake B")],
-                    'Fixed Rec A': [wandb.Image(grid_rec_a, caption="Fixed Rec A")],
-                    'Fixed Real B': [wandb.Image(grid_real_b, caption="Fixed Real B")],
-                    'Fixed Fake A': [wandb.Image(grid_fake_a, caption="Fixed Fake A")],
-                    'Fixed Rec B': [wandb.Image(grid_rec_b, caption="Fixed Rec B")],
-                    'epoch': self.current_epoch
-                })
-                self.train()  # Switch back to training mode
-
-                # DEBUG
-                print("Images logged")
+        if self.current_epoch % 1 == 0:
+            try:
+                with torch.no_grad():
+                    self.eval()
+                    
+                    # Generate outputs
+                    outputs = self(self.fixed_real_a, self.fixed_real_b)
+                    
+                    # Move to CPU and denormalize
+                    images = {
+                        'Real A': self.fixed_real_a.cpu(),
+                        'Fake B': outputs['fake_b'].cpu(),
+                        'Real B': self.fixed_real_b.cpu(),
+                        'Fake A': outputs['fake_a'].cpu()
+                    }
+                    
+                    # Denormalize all images
+                    images = {k: self.denormalize(v) for k, v in images.items()}
+                    
+                    # Log individual images
+                    for name, img in images.items():
+                        grid = make_grid(img, normalize=False, nrow=1)
+                        self.logger.experiment.log({
+                            name: wandb.Image(grid, caption=name)
+                        })
+                    
+                    # Create and log comparison grids
+                    # Stack Real A and Fake A vertically
+                    comparison_a = torch.cat([images['Fake A'], images['Real B']], dim=2)
+                    grid_a = make_grid(comparison_a, normalize=False, nrow=1)
+                    self.logger.experiment.log({
+                        'A Comparison': wandb.Image(grid_a, caption='Fake A vs Real A')
+                    })
+                    
+                    # Stack Real B and Fake B vertically
+                    comparison_b = torch.cat([images['Fake B'], images['Real A']], dim=2)
+                    grid_b = make_grid(comparison_b, normalize=False, nrow=1)
+                    self.logger.experiment.log({
+                        'B Comparison': wandb.Image(grid_b, caption='Fake B vs Real B')
+                    })
+                    
+                    self.train()
+                    
+            except Exception as e:
+                print(f"Visualization error: {str(e)}")
 
     def forward(self, real_a=None, real_b=None):
+        result = {}
 
-        # generate fake a and b for use in other losses
-        if real_a:
-            fake_a = self.BtoA(real_b)
-        if real_b:
-            fake_b = self.AtoB(real_a)
+        if isinstance(real_a, torch.Tensor):
+            result['fake_b'] = self.AtoB(real_a)
+        if isinstance(real_b, torch.Tensor):
+            result['fake_a'] = self.BtoA(real_b)
 
-        return {
-            'fake_a': fake_a,
-            'fake_b': fake_b,
-        }
+        return result
     
     def training_forward(self, real_a, real_b):
 
@@ -240,15 +240,15 @@ class RecycleGAN(pl.LightningModule):
         opt_p.zero_grad()
 
         # preidctor loss
-        loss_p_a = self.recurrent_loss(pred_next_a, pred_next_b)
-        loss_p_b = self.recurrent_loss(pred_next_b, pred_next_a)
-        loss_temp = (loss_p_a + loss_p_b) * 0.5
+        loss_p_a = self.recurrent_loss(pred_next_a, real_a_next)
+        loss_p_b = self.recurrent_loss(pred_next_b, real_b_next)
+        loss_predictor = (loss_p_a + loss_p_b) * 0.5
 
         # scale
-        loss_temp = loss_temp * self.l_temp
+        loss_predictor = loss_predictor * self.l_temp
 
         # backprop
-        self.manual_backward(loss_temp)
+        self.manual_backward(loss_predictor)
         torch.nn.utils.clip_grad_norm_(self.nextA.parameters(), max_norm=1.0)
         torch.nn.utils.clip_grad_norm_(self.nextB.parameters(), max_norm=1.0)
 
@@ -261,13 +261,50 @@ class RecycleGAN(pl.LightningModule):
 
         # Logging
         self.log_dict({
-            'loss_d': loss_d,
-            'loss_g': loss_g,
-            'loss_g_adv': loss_g_adv,
-            'loss_cycle': loss_cycle,
-            'loss_idt': loss_idt,
-            'loss_temp': loss_temp
-        }, prog_bar=True)
+            # Discriminator losses
+            'loss_d/total': loss_d,
+            'loss_d/loss_d_a': loss_d_a,
+            'loss_d/loss_d_b': loss_d_b,
+            'loss_d/loss_d_a_real': loss_d_a_real,
+            'loss_d/loss_d_a_fake': loss_d_a_fake,
+            'loss_d/loss_d_b_real': loss_d_b_real,
+            'loss_d/loss_d_b_fake': loss_d_b_fake,
+            
+            # Generator losses
+            'loss_g/total': loss_g,
+            'loss_g/adversarial': loss_g_adv,
+            'loss_g/adversarial_a': loss_g_adv_a,
+            'loss_g/adversarial_b': loss_g_adv_b,
+            'loss_g/cycle': loss_cycle,
+            'loss_g/cycle_a': loss_cycle_a,
+            'loss_g/cycle_b': loss_cycle_b,
+            'loss_g/identity': loss_idt,
+            'loss_g/identity_a': loss_idt_a,
+            'loss_g/identity_b': loss_idt_b,
+            'loss_g/recycle': loss_recycle,
+            'loss_g/recycle_a': loss_recycle_a,
+            'loss_g/recycle_b': loss_recycle_b,
+            
+            # Predictor losses
+            'loss_p/total': loss_predictor,
+            'loss_p/pred_a': loss_p_a,
+            'loss_p/pred_b': loss_p_b,
+            
+            # Learning rates
+            'lr/discriminator': opt_d.param_groups[0]['lr'],
+            'lr/generator': opt_g.param_groups[0]['lr'],
+            'lr/predictor': opt_p.param_groups[0]['lr'],
+            
+            # Gradient norms
+            'grad_norm/discriminator_a': torch.nn.utils.clip_grad_norm_(self.discriminatorA.parameters(), max_norm=1.0),
+            'grad_norm/discriminator_b': torch.nn.utils.clip_grad_norm_(self.discriminatorB.parameters(), max_norm=1.0),
+            'grad_norm/generator_AtoB': torch.nn.utils.clip_grad_norm_(self.AtoB.parameters(), max_norm=1.0),
+            'grad_norm/generator_BtoA': torch.nn.utils.clip_grad_norm_(self.BtoA.parameters(), max_norm=1.0),
+            'grad_norm/predictor_A': torch.nn.utils.clip_grad_norm_(self.nextA.parameters(), max_norm=1.0),
+            'grad_norm/predictor_B': torch.nn.utils.clip_grad_norm_(self.nextB.parameters(), max_norm=1.0),
+        }, prog_bar=True, sync_dist=True)
+
+
 
     def configure_optimizers(self):
         opt_d = torch.optim.Adam(
