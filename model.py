@@ -1,13 +1,16 @@
 import torch
 import pytorch_lightning as pl
-from torch.nn import functional as F
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.utils import make_grid
 import wandb
-from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import (
+    StepLR,
+    CosineAnnealingLR,
+    SequentialLR,
+    LinearLR,
+)
 from pytorch_lightning.callbacks import LearningRateMonitor
-from sequential_lr import SequentialLR
-from linear_lr import LinearLR
 
 from generators import ResNet, UNet
 from discriminator import PatchGAN, MultiScaleDiscriminator
@@ -19,8 +22,8 @@ class RecycleGAN(pl.LightningModule):
         
         self.AtoB = UNet()
         self.BtoA = UNet()
-        self.nextA = ResNet(num_residual_blocks=8)
-        self.nextB = ResNet(num_residual_blocks=8)
+        self.nextA = ResNet(num_residual_blocks=5)
+        self.nextB = ResNet(num_residual_blocks=5)
         self.discriminatorA = MultiScaleDiscriminator()
         self.discriminatorB = MultiScaleDiscriminator()
 
@@ -347,7 +350,7 @@ class RecycleGAN(pl.LightningModule):
         
         return [opt_d, opt_g, opt_p], [sched_d, sched_g, sched_p]
 
-    def create_scheduler(optimizer, warmup_epochs, step_size=10, gamma=0.1, start_factor=0.1):
+    def create_scheduler(self, optimizer, warmup_epochs, step_size=10, gamma=0.1, start_factor=0.1):
         warmup_scheduler = LinearLR(optimizer, start_factor=start_factor, total_iters=warmup_epochs)
         step_decay_scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
         
@@ -358,7 +361,7 @@ class RecycleGAN(pl.LightningModule):
         )
         return scheduler
 
-    def create_generator_scheduler(optimizer, warmup_epochs, T_max=50, eta_min=1e-6, start_factor=0.1):
+    def create_generator_scheduler(self, optimizer, warmup_epochs, T_max=50, eta_min=1e-6, start_factor=0.1):
         warmup_scheduler = LinearLR(optimizer, start_factor=start_factor, total_iters=warmup_epochs)
         cosine_scheduler = CosineAnnealingLR(optimizer, T_max=T_max, eta_min=eta_min)
         
@@ -377,10 +380,10 @@ class RecycleGAN(pl.LightningModule):
         return loss / len(preds)  # average across scales
 
     def make_ones_targets(self, preds):
-        return [torch.ones_like(pred) for pred in preds]
+        return [torch.smooth_ones_like(pred) for pred in preds]
 
     def make_zeros_targets(self, preds):
-        return [torch.zeros_like(pred) for pred in preds]
+        return [torch.smooth_zeros_like(pred) for pred in preds]
         
     def smooth_ones_like(self, tensor):
         ones = torch.ones_like(tensor)

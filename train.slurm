@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=rerecycleGAN
-#SBATCH --gres=gpu:a5000:4  # Request 4 A100 GPUs
+#SBATCH --gres=gpu:a6000:4  # Request 4 A100 GPUs
 #SBATCH  --mem-per-cpu=32G  # Request 32GB of memory per CPU thread
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8  # Allocate 8 CPU threads

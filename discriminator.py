@@ -41,7 +41,7 @@ class MultiScaleDiscriminator(nn.Module):
     Multi-scale PatchGAN discriminator.
     Utilizes multiple PatchGAN discriminators at different image scales.
     """
-    def __init__(self, in_channels=3, base_features=64, num_downs=3, num_scales=3):
+    def __init__(self, in_channels=3, base_features=64, num_downs=4, num_scales=3):
         super(MultiScaleDiscriminator, self).__init__()
 
         self.discriminators = nn.ModuleList([

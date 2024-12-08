@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+import torch
 from torch.utils.data import DataLoader
 from dataset import RecycleGANDataset
 
@@ -20,4 +21,11 @@ class RecycleGANDataModule(pl.LightningDataModule):
         )
 
     def train_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
+        return DataLoader(
+            self.dataset, 
+            batch_size=self.batch_size,
+            shuffle=False,  # Changed because DistributedSampler handles shuffling
+            num_workers=4,  # Add num_workers for parallel data loading
+            pin_memory=True,  # Better GPU transfer
+            sampler=torch.utils.data.distributed.DistributedSampler(self.dataset)
+        )

@@ -25,7 +25,7 @@ def train():
     data_module = RecycleGANDataModule(
         video_path_A="videos/trimmed/trimmed_animated.mp4",
         video_path_B="videos/trimmed/trimmed_live_action.mp4",
-        batch_size=4,
+        batch_size=8,
         transform=transform
     )
 
@@ -33,8 +33,8 @@ def train():
     model = RecycleGAN(
         l_adv=1.0,
         l_cycle=10.0,
-        l_iden=5.0,
-        l_temp=1.0,
+        l_iden=2.0,
+        l_temp=2.0,
         learning_rate_d=0.0001,
         learning_rate_g=0.0002,
         learning_rate_p=0.0002,
@@ -45,9 +45,10 @@ def train():
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',
         filename='recyclegan-epoch{epoch}',
-        every_n_epochs=5,
+        every_n_epochs=10,
         save_top_k=-1,
-        save_last=True
+        save_last=True,
+        save_weights_only=True,
     )
 
     lr_monitor = LearningRateMonitor(logging_interval='epoch')

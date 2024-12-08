@@ -36,7 +36,7 @@ class ResNet(nn.Module):
     ResNet Generator
     Based on the generator used in RecycleGAN.
     '''
-    def __init__(self, in_channels=3, out_channels=3, num_residual_blocks=6):
+    def __init__(self, in_channels=3, out_channels=3, num_residual_blocks=4):
         super(ResNet, self).__init__()
         
         # Initial downsampling
@@ -76,7 +76,7 @@ class ResNet(nn.Module):
         return out
 
 class UNet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3, base_features=64):
+    def __init__(self, in_channels=3, out_channels=3, base_features=48):
         super(UNet, self).__init__()
 
         # Encoder blocks
