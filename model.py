@@ -4,6 +4,10 @@ from torch.nn import functional as F
 import torch.nn as nn
 from torchvision.utils import make_grid
 import wandb
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
+from pytorch_lightning.callbacks import LearningRateMonitor
+from sequential_lr import SequentialLR
+from linear_lr import LinearLR
 
 from generators import ResNet, UNet
 from discriminator import PatchGAN, MultiScaleDiscriminator
@@ -327,31 +331,9 @@ class RecycleGAN(pl.LightningModule):
         )
         
 
-        sched_d = torch.optim.lr_scheduler.SequentialLR(
-            opt_d,
-            schedulers=[torch.optim.lr_scheduler.LinearLR(opt_d, start_factor=0.1, total_iters=self.lr_warmup_epochs),
-                        torch.optim.lr_scheduler.StepLR(opt_d, step_size=10, gamma=0.1)],
-            milestones=[self.lr_warmup_epochs]
-        )
-
-        sched_g = torch.optim.lr_scheduler.SequentialLR(
-            opt_g,
-            schedulers=[torch.optim.lr_scheduler.LinearLR(opt_g, start_factor=0.1, total_iters=self.lr_warmup_epochs),
-                        torch.optim.lr_scheduler.StepLR(opt_g, step_size=10, gamma=0.1)],
-            milestones=[self.lr_warmup_epochs]
-        )
-
-        sched_p = torch.optim.lr_scheduler.SequentialLR(
-            opt_p,
-            schedulers=[torch.optim.lr_scheduler.LinearLR(opt_p, start_factor=0.1, total_iters=self.lr_warmup_epochss),
-                        torch.optim.lr_scheduler.StepLR(opt_p, step_size=10, gamma=0.1)],
-            milestones=[self.lr_warmup_epochs]
-        )
-
-        # Old, without warmup
-        # sched_d = torch.optim.lr_scheduler.StepLR(opt_d, step_size=10, gamma=0.1)
-        # sched_g = torch.optim.lr_scheduler.StepLR(opt_g, step_size=10, gamma=0.1)
-        # sched_p = torch.optim.lr_scheduler.StepLR(opt_p, step_size=10, gamma=0.1)
+        sched_d = self.create_scheduler(opt_d, warmup_epochs=5, step_size=10, gamma=0.1, start_factor=0.1)
+        sched_g = self.create_generator_scheduler(opt_g, warmup_epochs=5, T_max=50, eta_min=1e-6, start_factor=0.1)
+        sched_p = self.create_scheduler(opt_p, warmup_epochs=5, step_size=10, gamma=0.1, start_factor=0.1)
 
         self.logger.log_hyperparams({
         'lr_discriminator': self.learning_rate_d,
@@ -364,6 +346,28 @@ class RecycleGAN(pl.LightningModule):
         })
         
         return [opt_d, opt_g, opt_p], [sched_d, sched_g, sched_p]
+
+    def create_scheduler(optimizer, warmup_epochs, step_size=10, gamma=0.1, start_factor=0.1):
+        warmup_scheduler = LinearLR(optimizer, start_factor=start_factor, total_iters=warmup_epochs)
+        step_decay_scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
+        
+        scheduler = SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, step_decay_scheduler],
+            milestones=[warmup_epochs]
+        )
+        return scheduler
+
+    def create_generator_scheduler(optimizer, warmup_epochs, T_max=50, eta_min=1e-6, start_factor=0.1):
+        warmup_scheduler = LinearLR(optimizer, start_factor=start_factor, total_iters=warmup_epochs)
+        cosine_scheduler = CosineAnnealingLR(optimizer, T_max=T_max, eta_min=eta_min)
+        
+        scheduler = SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, cosine_scheduler],
+            milestones=[warmup_epochs]
+        )
+        return scheduler
 
     def compute_adversarial_loss(self, preds, targets):
         # preds and targets are lists of tensors from multi-scale discriminator

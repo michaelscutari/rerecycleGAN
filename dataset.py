@@ -5,6 +5,7 @@ import torch
 import cv2
 from torch.utils.data import Dataset
 from torchvision import transforms
+from torchvision.transforms.functional import hflip
 
 class RecycleGANDataset(Dataset):
     def __init__(self, video_path_A, video_path_B, transform=None, frame_size=(432, 240), frame_rate=1):
