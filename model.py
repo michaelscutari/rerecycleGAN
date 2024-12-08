@@ -334,9 +334,9 @@ class RecycleGAN(pl.LightningModule):
         )
         
 
-        sched_d = self.create_scheduler(opt_d, warmup_epochs=5, step_size=10, gamma=0.1, start_factor=0.1)
-        sched_g = self.create_generator_scheduler(opt_g, warmup_epochs=5, T_max=50, eta_min=1e-6, start_factor=0.1)
-        sched_p = self.create_scheduler(opt_p, warmup_epochs=5, step_size=10, gamma=0.1, start_factor=0.1)
+        sched_d = self.create_scheduler(opt_d, warmup_epochs=self.lr_warmup_epochs, step_size=10, gamma=0.1, start_factor=0.1)
+        sched_g = self.create_generator_scheduler(opt_g, warmup_epochs=self.lr_warmup_epochs, T_max=50, eta_min=1e-6, start_factor=0.1)
+        sched_p = self.create_scheduler(opt_p, warmup_epochs=self.lr_warmup_epochs, step_size=10, gamma=0.1, start_factor=0.1)
 
         self.logger.log_hyperparams({
         'lr_discriminator': self.learning_rate_d,
@@ -352,7 +352,7 @@ class RecycleGAN(pl.LightningModule):
 
     def create_scheduler(self, optimizer, warmup_epochs, step_size=10, gamma=0.1, start_factor=0.1):
         warmup_scheduler = LinearLR(optimizer, start_factor=start_factor, total_iters=warmup_epochs)
-        step_decay_scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
+        step_decay_scheduler = StepLR(optimizer, step_size=step_size + warmup_epochs, gamma=gamma)
         
         scheduler = SequentialLR(
             optimizer,
@@ -380,10 +380,10 @@ class RecycleGAN(pl.LightningModule):
         return loss / len(preds)  # average across scales
 
     def make_ones_targets(self, preds):
-        return [torch.smooth_ones_like(pred) for pred in preds]
+        return [self.smooth_ones_like(pred) for pred in preds]
 
     def make_zeros_targets(self, preds):
-        return [torch.smooth_zeros_like(pred) for pred in preds]
+        return [self.smooth_zeros_like(pred) for pred in preds]
         
     def smooth_ones_like(self, tensor):
         ones = torch.ones_like(tensor)
